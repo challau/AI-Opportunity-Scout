@@ -11,7 +11,7 @@ from pytz import timezone
 
 from app.core.config import settings
 from app.scheduler.lock import acquire_lock, release_lock, refresh_lock, get_lock_info
-from app.scheduler.tasks import run_crawl_task, run_daily_digest, run_deadline_reminders
+from app.scheduler.tasks import run_crawl_task, run_daily_digest, run_deadline_reminders, run_hourly_notifications
 
 logger = structlog.get_logger()
 
@@ -94,6 +94,22 @@ async def start_scheduler_async() -> None:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=300,
+    )
+
+    # ─── Hourly opportunity notifications ─────────────────────────────────────
+    from datetime import datetime, timedelta
+    _scheduler.add_job(
+        func=run_hourly_notifications,
+        args=["scheduled"],
+        trigger=IntervalTrigger(hours=1),
+        id="hourly_notifications",
+        name="Hourly opportunity notifications",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=600,
+        # First run ~2 min after boot so each deploy verifies the pipeline
+        # without waiting a full hour; dedup makes early runs safe.
+        next_run_time=datetime.now(timezone(settings.SCHEDULER_TIMEZONE)) + timedelta(seconds=120),
     )
 
     # ─── Daily digest (Cron) ──────────────────────────────────────────────────

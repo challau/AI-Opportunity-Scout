@@ -504,3 +504,248 @@ async def run_deadline_reminders(trigger_source: str = "scheduled") -> None:
                 scheduler_log.error_message = json.dumps(failures)[:1000]
             db.add(scheduler_log)
             await db.commit()
+
+
+# ─── Hourly opportunity notifications ─────────────────────────────────────────
+
+HOURLY_PLATFORMS = [
+    "unstop", "devfolio", "hackerearth", "hack2skill", "devpost",
+    "codeforces", "codechef", "leetcode", "atcoder",
+]
+
+HACKATHON_SET = {"unstop", "devfolio", "hackerearth", "hack2skill", "devpost"}
+
+
+def _parse_dt(value):
+    """Best-effort conversion of crawler date values to aware datetimes."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        for candidate in (value, value.replace("Z", "+00:00")):
+            try:
+                return datetime.fromisoformat(candidate)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def _hourly_digest_email(new_events: list) -> tuple[str, str]:
+    """Build (text, html) digest for newly discovered events."""
+    hackathons = [e for e in new_events if e.platform in HACKATHON_SET]
+    contests = [e for e in new_events if e.platform not in HACKATHON_SET]
+
+    def fmt(dt):
+        return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "Check website"
+
+    def text_block(events, header):
+        if not events:
+            return []
+        lines = ["=" * 20, "", header, ""]
+        for i, e in enumerate(events, 1):
+            lines += [
+                f"{i}. {e.title}",
+                f"   Platform: {e.platform.capitalize()}",
+                f"   Start date: {fmt(e.event_start_date)}",
+                f"   Deadline: {fmt(e.registration_deadline)}",
+                f"   Prize: {e.prize or 'Not specified'}",
+                f"   Eligibility: {e.eligibility or 'Open to all'}",
+                f"   Link: {e.registration_url}",
+                "",
+            ]
+        return lines
+
+    text = "\n".join(
+        ["Hello,", "", "New opportunities found in the last scan:", ""]
+        + text_block(hackathons, "🔥 New Hackathons")
+        + text_block(contests, "⚔ New Coding Contests")
+        + ["=" * 20]
+    )
+
+    def html_cards(events):
+        cards = []
+        for e in events:
+            rows = "".join(
+                f'<tr><td style="padding:5px 0;color:#94a3b8;font-size:13px;">{k}</td>'
+                f'<td style="padding:5px 0;color:#e2e8f0;font-size:13px;text-align:right;">{v}</td></tr>'
+                for k, v in [
+                    ("Platform", e.platform.capitalize()),
+                    ("Start date", fmt(e.event_start_date)),
+                    ("Deadline", fmt(e.registration_deadline)),
+                    ("Prize", e.prize or "Not specified"),
+                    ("Eligibility", (e.eligibility or "Open to all")[:120]),
+                ]
+            )
+            cards.append(
+                f'<div style="background:#252540;border:1px solid #3a3a5c;border-radius:12px;padding:18px;margin:12px 0;">'
+                f'<div style="font-size:16px;font-weight:700;color:#a78bfa;margin-bottom:8px;">{e.title}</div>'
+                f'<table style="width:100%;border-collapse:collapse;">{rows}</table>'
+                f'<a href="{e.registration_url}" style="display:inline-block;margin-top:10px;padding:8px 18px;'
+                f'background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;'
+                f'font-size:13px;">Open →</a></div>'
+            )
+        return "".join(cards)
+
+    sections = ""
+    if hackathons:
+        sections += f'<h2 style="color:#f59e0b;font-size:17px;margin:20px 0 4px;">🔥 New Hackathons</h2>{html_cards(hackathons)}'
+    if contests:
+        sections += f'<h2 style="color:#38bdf8;font-size:17px;margin:20px 0 4px;">⚔ New Coding Contests</h2>{html_cards(contests)}'
+
+    html = (
+        '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f0f1a;'
+        "font-family:'Segoe UI',Arial,sans-serif;\">"
+        '<div style="max-width:600px;margin:0 auto;padding:20px;">'
+        '<div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px 16px 0 0;'
+        'padding:32px 28px;text-align:center;">'
+        '<h1 style="color:#fff;font-size:22px;margin:0;">🚀 AI Opportunity Scout</h1>'
+        '<p style="color:rgba(255,255,255,0.85);margin:6px 0 0;">New opportunities found</p></div>'
+        f'<div style="background:#1a1a2e;padding:24px;">{sections}</div>'
+        '<div style="background:#0f0f1a;padding:16px;text-align:center;color:#64748b;font-size:12px;'
+        'border-radius:0 0 16px 16px;">AI Opportunity Scout · hourly scan</div></div></body></html>'
+    )
+    return text, html
+
+
+async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
+    """Crawl target platforms, store deduplicated events, email users about NEW ones."""
+    from app.ai.duplicate_agent import _compute_content_hash
+    from app.services.email_service import EmailService
+
+    start_time = datetime.now(timezone.utc)
+    logger.info("Hourly notification job started", trigger_source=trigger_source)
+
+    scheduler_log = SchedulerLog(
+        job_id="hourly_notifications",
+        job_name="Hourly opportunity notifications",
+        status="running",
+        started_at=start_time,
+        platforms_crawled=HOURLY_PLATFORMS,
+        trigger_source=trigger_source,
+    )
+    async with AsyncSessionLocal() as db:
+        db.add(scheduler_log)
+        await db.commit()
+        await db.refresh(scheduler_log)
+    log_id = scheduler_log.id
+
+    from app.collectors import get_crawler
+
+    events_found = 0
+    duplicates_removed = 0
+    failures = {}
+    new_event_ids = []
+
+    for platform in HOURLY_PLATFORMS:
+        try:
+            crawler = get_crawler(platform)
+            raw_events = await crawler.crawl()
+        except Exception as e:
+            failures[platform] = str(e)[:300]
+            logger.error("Crawler failed", platform=platform, error=str(e))
+            continue
+
+        logger.info("Crawler completed", platform=platform, events=len(raw_events))
+        events_found += len(raw_events)
+
+        async with AsyncSessionLocal() as db:
+            for raw in raw_events:
+                if not raw.get("title") or not raw.get("registration_url"):
+                    continue
+                content_hash = _compute_content_hash(raw)  # title|platform|registration_url
+                exists = await db.execute(
+                    select(Event.id).where(Event.content_hash == content_hash).limit(1)
+                )
+                if exists.scalar_one_or_none():
+                    duplicates_removed += 1
+                    continue
+                event = Event(
+                    title=raw.get("title", "")[:500],
+                    description=raw.get("description"),
+                    platform=raw.get("platform", platform),
+                    event_type=raw.get("event_type", "hackathon"),
+                    tags=raw.get("tags") or [],
+                    domains=raw.get("domains") or [],
+                    prize=str(raw["prize"])[:500] if raw.get("prize") else None,
+                    location=raw.get("location"),
+                    is_remote=raw.get("is_remote", True),
+                    is_free=raw.get("is_free", True),
+                    eligibility=raw.get("eligibility"),
+                    organizer=raw.get("organizer"),
+                    registration_deadline=_parse_dt(raw.get("registration_deadline")),
+                    event_start_date=_parse_dt(raw.get("event_start_date")),
+                    event_end_date=_parse_dt(raw.get("event_end_date")),
+                    registration_url=raw.get("registration_url", ""),
+                    image_url=raw.get("image_url"),
+                    content_hash=content_hash,
+                    external_id=str(raw.get("external_id") or "") or None,
+                )
+                db.add(event)
+                await db.flush()
+                new_event_ids.append(event.id)
+            await db.commit()
+
+    logger.info(
+        "New events found",
+        new=len(new_event_ids),
+        found=events_found,
+        duplicates_removed=duplicates_removed,
+    )
+
+    # Email only when this run discovered NEW events
+    emails_sent = 0
+    if new_event_ids:
+        email_service = EmailService()
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Event).where(Event.id.in_(new_event_ids)))
+            new_events = list(result.scalars().all())
+            # Cap digest size so emails stay readable
+            new_events = new_events[:25]
+
+            users_result = await db.execute(select(User).where(User.is_active == True))
+            recipients = [u.email for u in users_result.scalars().all()]
+            if settings.NOTIFICATION_EMAIL and settings.NOTIFICATION_EMAIL not in recipients:
+                recipients.append(settings.NOTIFICATION_EMAIL)
+
+        if recipients and new_events:
+            text, html = _hourly_digest_email(new_events)
+            for recipient in recipients:
+                try:
+                    ok = await email_service.send_email(
+                        to_email=recipient,
+                        subject="🚀 New Hackathons & Coding Contests",
+                        html_content=html,
+                        text_content=text,
+                    )
+                    if ok:
+                        emails_sent += 1
+                except Exception as e:
+                    failures[f"email_{recipient}"] = str(e)[:200]
+            logger.info("Emails sent", count=emails_sent, recipients=len(recipients))
+        else:
+            logger.info("No recipients or no new events; skipping email")
+
+    end_time = datetime.now(timezone.utc)
+    status = "failed" if len(failures) >= len(HOURLY_PLATFORMS) else "success"
+    async with AsyncSessionLocal() as db:
+        fresh_log = await db.get(SchedulerLog, log_id)
+        if fresh_log:
+            fresh_log.status = status
+            fresh_log.completed_at = end_time
+            fresh_log.duration_seconds = (end_time - start_time).total_seconds()
+            fresh_log.events_found = events_found
+            fresh_log.events_new = len(new_event_ids)
+            fresh_log.emails_sent = emails_sent
+            fresh_log.failures = failures
+            db.add(fresh_log)
+            await db.commit()
+
+    summary = {
+        "status": status,
+        "events_found": events_found,
+        "events_new": len(new_event_ids),
+        "duplicates_removed": duplicates_removed,
+        "emails_sent": emails_sent,
+        "failures": failures,
+    }
+    logger.info("Hourly notification job finished", **summary)
+    return summary

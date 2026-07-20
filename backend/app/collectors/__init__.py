@@ -5,6 +5,7 @@ from app.collectors.devfolio import DevfolioCrawler
 from app.collectors.hackerearth import HackerEarthCrawler, HackSkillCrawler
 from app.collectors.devpost import DevpostCrawler, KaggleCrawler, MLHCrawler, GitHubEventsCrawler
 from app.collectors.codeforces import CodeforcesCrawler, CodeChefCrawler, AtCoderCrawler
+from app.collectors.leetcode import LeetCodeCrawler
 from app.collectors.google import GSoCCrawler, GSSoCCrawler, GoogleEventsCrawler, MicrosoftEventsCrawler, IEEECrawler
 
 CRAWLER_REGISTRY = {
@@ -18,6 +19,7 @@ CRAWLER_REGISTRY = {
     "github": GitHubEventsCrawler,
     "codeforces": CodeforcesCrawler,
     "codechef": CodeChefCrawler,
+    "leetcode": LeetCodeCrawler,
     "atcoder": AtCoderCrawler,
     "gsoc": GSoCCrawler,
     "gssoc": GSSoCCrawler,

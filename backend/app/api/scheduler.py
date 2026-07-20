@@ -10,17 +10,56 @@ from app.core.deps import get_current_admin, get_db
 from app.models.user import User
 from app.models.other import SchedulerLog
 from app.scheduler.scheduler import get_scheduler, get_scheduler_status_details
-from app.scheduler.tasks import run_crawl_task, run_daily_digest, run_deadline_reminders
+from app.scheduler.tasks import run_crawl_task, run_daily_digest, run_deadline_reminders, run_hourly_notifications
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/scheduler", tags=["Scheduler Management"])
 
 
 @router.get("/status")
-async def get_scheduler_status(
+async def get_scheduler_status(db: AsyncSession = Depends(get_db)):
+    """Public scheduler status: running state, last/next run, and last-run metrics."""
+    scheduler = get_scheduler()
+    running = scheduler is not None and scheduler.running
+
+    next_run = None
+    if scheduler:
+        job = scheduler.get_job("hourly_notifications")
+        if job and job.next_run_time:
+            next_run = job.next_run_time.isoformat()
+
+    last_run = None
+    events_found = 0
+    emails_sent = 0
+    try:
+        result = await db.execute(
+            select(SchedulerLog)
+            .where(SchedulerLog.job_id == "hourly_notifications")
+            .order_by(SchedulerLog.started_at.desc())
+            .limit(1)
+        )
+        last = result.scalar_one_or_none()
+        if last:
+            last_run = last.started_at.isoformat() if last.started_at else None
+            events_found = last.events_new or 0
+            emails_sent = last.emails_sent or 0
+    except Exception as e:
+        logger.warning("Could not load last scheduler run", error=str(e))
+
+    return {
+        "running": running,
+        "last_run": last_run or "",
+        "next_run": next_run or "",
+        "events_found": events_found,
+        "emails_sent": emails_sent,
+    }
+
+
+@router.get("/status/detailed")
+async def get_scheduler_status_detailed(
     _: User = Depends(get_current_admin),
 ):
-    """Get active status and Redis locking information of the scheduler."""
+    """Get active status and Redis locking information of the scheduler (admin)."""
     details = await get_scheduler_status_details()
     return details
 
@@ -59,6 +98,7 @@ async def trigger_scheduler_job(
         "crawl_all": lambda: run_crawl_task("all", "manual"),
         "daily_digest": lambda: run_daily_digest("manual"),
         "deadline_reminders": lambda: run_deadline_reminders("manual"),
+        "hourly_notifications": lambda: run_hourly_notifications("manual"),
     }
 
     if job_id not in tasks:
