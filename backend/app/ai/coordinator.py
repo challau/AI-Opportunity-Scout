@@ -103,15 +103,24 @@ class AICoordinator:
 
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-        # Build user context
+        # Build user context — query the profile explicitly (accessing
+        # user.profile would lazy-load outside the async greenlet and crash)
         profile_info = "No profile configured"
-        if hasattr(user, "profile") and user.profile:
-            p = user.profile
-            profile_info = f"""
-            Interests: {', '.join(p.interested_domains or [])}
-            Languages: {', '.join(p.programming_languages or [])}
-            Country: {p.country or 'Not specified'}
-            """
+        try:
+            from sqlalchemy import select
+            from app.models.profile import UserProfile
+            result = await db.execute(
+                select(UserProfile).where(UserProfile.user_id == user.id)
+            )
+            p = result.scalar_one_or_none()
+            if p:
+                profile_info = f"""
+                Interests: {', '.join(p.interested_domains or [])}
+                Languages: {', '.join(p.programming_languages or [])}
+                Country: {p.country or 'Not specified'}
+                """
+        except Exception as e:
+            logger.warning("Could not load profile for chat context", error=str(e))
 
         # Get event count
         repo = EventRepository(db)
@@ -145,17 +154,41 @@ class AICoordinator:
                 ])
                 messages[-1]["content"] += f"\n\nRelevant events I found:\n{event_context}"
 
-        response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=messages,  # type: ignore
-            max_tokens=1000,
-            temperature=0.7,
+        response = None
+        openai_configured = bool(
+            settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("sk-your")
         )
+        if openai_configured:
+            try:
+                response = await client.chat.completions.create(
+                    model=settings.OPENAI_MODEL,
+                    messages=messages,  # type: ignore
+                    max_tokens=1000,
+                    temperature=0.7,
+                )
+            except Exception as e:
+                logger.warning("OpenAI chat failed, falling back to search-only reply", error=str(e))
 
-        reply = response.choices[0].message.content or ""
+        if response:
+            reply = response.choices[0].message.content or ""
+        elif suggested_events:
+            listing = "\n".join(
+                f"• {e.title} ({e.platform})" for e in suggested_events
+            )
+            reply = (
+                "Here are opportunities matching your search:\n\n"
+                f"{listing}\n\n"
+                "(AI answers are unavailable right now, but these matched your query.)"
+            )
+        else:
+            reply = (
+                "I searched the database but couldn't find matching events for that. "
+                "Try keywords like 'hackathon', 'contest', or a platform name. "
+                "(AI answers are unavailable right now.)"
+            )
 
         return ChatResponse(
             message=reply,
             suggested_events=suggested_events,
-            metadata={"model": settings.OPENAI_MODEL},
+            metadata={"model": settings.OPENAI_MODEL if response else "search-fallback"},
         )
