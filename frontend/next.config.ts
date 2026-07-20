@@ -4,11 +4,6 @@ const nextConfig: NextConfig = {
   // Standalone output — optimal for Vercel and containerized deployments
   output: "standalone",
 
-  // Disable ESLint during production builds (lint separately in CI)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   // Disable TypeScript build errors (type-check separately)
   typescript: {
     ignoreBuildErrors: true,
