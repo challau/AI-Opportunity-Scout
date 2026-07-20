@@ -60,6 +60,19 @@ class UnstopCrawler(BaseCrawler):
             return f"{currency}{int(sum(cash)):,}"
         return None
 
+    @staticmethod
+    def _image_url(item: Dict) -> Optional[str]:
+        """banner_mobile/logoUrl2 may be dicts ({image_url: ...}) or strings."""
+        for key in ("banner_mobile", "logoUrl2"):
+            val = item.get(key)
+            if isinstance(val, str) and val:
+                return val
+            if isinstance(val, dict):
+                url = val.get("image_url") or val.get("url")
+                if isinstance(url, str) and url:
+                    return url
+        return None
+
     def _parse_item(self, item: Dict, event_type: str) -> Dict:
         """Parse a single Unstop opportunity item."""
         try:
@@ -77,7 +90,7 @@ class UnstopCrawler(BaseCrawler):
                 "event_start_date": item.get("start_date"),
                 "event_end_date": item.get("end_date"),
                 "registration_url": url,
-                "image_url": item.get("banner_mobile") or item.get("logoUrl2"),
+                "image_url": self._image_url(item),
                 "organizer": (item.get("organisation") or {}).get("name"),
                 "is_free": not item.get("isPaid", False),
                 "is_remote": item.get("region") != "offline",

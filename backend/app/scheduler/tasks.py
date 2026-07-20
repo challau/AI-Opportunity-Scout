@@ -662,6 +662,7 @@ async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
                 if exists.scalar_one_or_none():
                     duplicates_removed += 1
                     continue
+                image = raw.get("image_url")
                 event = Event(
                     title=raw.get("title", "")[:500],
                     description=raw.get("description"),
@@ -679,12 +680,23 @@ async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
                     event_start_date=_parse_dt(raw.get("event_start_date")),
                     event_end_date=_parse_dt(raw.get("event_end_date")),
                     registration_url=raw.get("registration_url", ""),
-                    image_url=raw.get("image_url"),
+                    image_url=image if isinstance(image, str) else None,
                     content_hash=content_hash,
                     external_id=str(raw.get("external_id") or "") or None,
                 )
-                db.add(event)
-                await db.flush()
+                try:
+                    async with db.begin_nested():  # savepoint per row
+                        db.add(event)
+                        await db.flush()
+                except Exception as e:
+                    # One malformed row must not poison the whole platform batch
+                    logger.warning(
+                        "Skipping unsaveable event",
+                        platform=platform,
+                        title=raw.get("title", "")[:60],
+                        error=str(e)[:150],
+                    )
+                    continue
                 new_event_ids.append(event.id)
             await db.commit()
 
