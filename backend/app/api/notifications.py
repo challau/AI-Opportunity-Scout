@@ -176,6 +176,8 @@ async def send_test_email(db: AsyncSession = Depends(get_db)):
     ]
     if settings.SMTP_USERNAME in ("", "your@gmail.com") or "your-" in settings.SMTP_PASSWORD:
         missing = missing or ["SMTP_USERNAME", "SMTP_PASSWORD"]
+    if settings.BREVO_API_KEY:
+        missing = []  # HTTPS API path doesn't need SMTP vars
     if missing:
         logger.error("Test email aborted: SMTP not configured", missing=missing)
         return {

@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ""
     # Default recipient for test/system notifications
     NOTIFICATION_EMAIL: str = ""
+    # Brevo HTTPS API key (xkeysib-...) — preferred over SMTP on hosts that
+    # block outbound SMTP ports (e.g. Railway)
+    BREVO_API_KEY: str = ""
 
     # ─── Telegram ─────────────────────────────────────────────────────────────
     TELEGRAM_BOT_TOKEN: str = ""

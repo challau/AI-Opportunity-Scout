@@ -101,6 +101,33 @@ class EmailService:
             start_tls=True,
         )
 
+    async def _send_via_brevo_api(
+        self, to_email: str, subject: str, html_content: str, text_content: Optional[str]
+    ) -> bool:
+        """Send via Brevo's HTTPS API — works where outbound SMTP ports are blocked."""
+        import httpx
+
+        payload = {
+            "sender": {"name": settings.SMTP_FROM_NAME, "email": settings.SMTP_FROM_EMAIL},
+            "to": [{"email": to_email}],
+            "subject": subject,
+            "htmlContent": html_content,
+        }
+        if text_content:
+            payload["textContent"] = text_content
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={"api-key": settings.BREVO_API_KEY, "Content-Type": "application/json"},
+                json=payload,
+            )
+        if resp.status_code in (200, 201):
+            logger.info("Email sent via Brevo API", to=to_email, subject=subject)
+            return True
+        logger.error("Brevo API send failed", status=resp.status_code, body=resp.text[:200], to=to_email)
+        return False
+
     async def send_email(
         self,
         to_email: str,
@@ -108,7 +135,14 @@ class EmailService:
         html_content: str,
         text_content: Optional[str] = None,
     ) -> bool:
-        """Send an email via SMTP with automatic retry on transient failures."""
+        """Send an email via Brevo HTTP API (preferred) or SMTP fallback."""
+        # HTTPS API first: Railway blocks outbound SMTP ports
+        if settings.BREVO_API_KEY:
+            try:
+                return await self._send_via_brevo_api(to_email, subject, html_content, text_content)
+            except Exception as e:
+                logger.error("Brevo API error, falling back to SMTP", error=str(e))
+
         if not settings.SMTP_USERNAME:
             logger.warning("SMTP not configured, skipping email")
             return False
