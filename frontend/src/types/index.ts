@@ -20,10 +20,12 @@ export interface UserProfile {
   interested_domains: string[];
   programming_languages: string[];
   preferred_platforms: string[];
+  selected_sources: string[];
   email_notifications: boolean;
   telegram_notifications: boolean;
-  notification_frequency: "instant" | "daily" | "weekly";
+  notification_frequency: "instant" | "hourly" | "daily" | "weekly";
   telegram_chat_id?: string;
+  last_notification_time?: string;
 }
 
 export interface Event {

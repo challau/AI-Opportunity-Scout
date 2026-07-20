@@ -9,7 +9,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   User, Bell, Globe, Code2, Upload, FileText,
-  CheckCircle, Loader2, Sparkles, Trash2, Download,
+  CheckCircle, Loader2, Sparkles, Trash2, Download, Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,13 +60,7 @@ export default function ProfilePage() {
     authService.getMe().then(setUser).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (profile) {
-      setSelectedDomains(profile.interested_domains || []);
-      setSelectedLangs(profile.programming_languages || []);
-      setSelectedPlatforms(profile.preferred_platforms || []);
-    }
-  }, [profile]);
+
 
   const updateMutation = useMutation({
     mutationFn: usersService.updateProfile,
@@ -87,6 +81,35 @@ export default function ProfilePage() {
         ? current.filter((i) => i !== item)
         : [...current, item]
     );
+  };
+
+  const [selectedSources, setSelectedSources] = useState<string[]>([
+    "unstop", "devfolio", "hackerearth", "hack2skill", "devpost",
+    "codeforces", "codechef", "leetcode", "atcoder",
+  ]);
+  const [hourlyEmail, setHourlyEmail] = useState(true);
+
+  useEffect(() => {
+    if (profile) {
+      setSelectedDomains(profile.interested_domains || []);
+      setSelectedLangs(profile.programming_languages || []);
+      setSelectedPlatforms(profile.preferred_platforms || []);
+      if (profile.selected_sources && profile.selected_sources.length > 0) {
+        setSelectedSources(profile.selected_sources);
+      }
+      setHourlyEmail(profile.notification_frequency === "hourly");
+    }
+  }, [profile]);
+
+  const savePreferences = () => {
+    updateMutation.mutate({
+      interested_domains: selectedDomains,
+      programming_languages: selectedLangs,
+      preferred_platforms: selectedPlatforms,
+      selected_sources: selectedSources,
+      notification_frequency: hourlyEmail ? "hourly" : "daily",
+      email_notifications: true,
+    });
   };
 
   const saveInterests = () => {
@@ -225,69 +248,130 @@ export default function ProfilePage() {
           </motion.div>
         </TabsContent>
 
-        {/* Notifications tab */}
+        {/* Notifications tab — exact required UI */}
         <TabsContent value="notifications">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-2xl p-6 border border-border/50 space-y-6">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Bell className="w-5 h-5 text-primary" />
-              Notification Settings
-            </h3>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 glass rounded-xl border border-border/30">
-                <div>
-                  <div className="font-medium">Email Notifications</div>
-                  <div className="text-sm text-muted-foreground">Receive daily digests and alerts via email</div>
-                </div>
-                <Switch
-                  checked={profile?.email_notifications ?? true}
-                  onCheckedChange={(v) => updateMutation.mutate({ email_notifications: v })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-4 glass rounded-xl border border-border/30">
-                <div>
-                  <div className="font-medium">Telegram Notifications</div>
-                  <div className="text-sm text-muted-foreground">Get instant alerts via Telegram bot</div>
-                </div>
-                <Switch
-                  checked={profile?.telegram_notifications ?? false}
-                  onCheckedChange={(v) => updateMutation.mutate({ telegram_notifications: v })}
-                />
-              </div>
-
-              <div className="p-4 glass rounded-xl border border-border/30 space-y-3">
-                <Label>Telegram Chat ID</Label>
-                <Input
-                  placeholder="Your Telegram chat_id (start a chat with @userinfobot)"
-                  defaultValue={profile?.telegram_chat_id || ""}
-                  className="bg-secondary/30"
-                  onBlur={(e) => updateMutation.mutate({ telegram_chat_id: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Start a chat with @userinfobot on Telegram to get your Chat ID, then add our bot.
-                </p>
-              </div>
-
-              <div className="p-4 glass rounded-xl border border-border/30 space-y-3">
-                <Label>Notification Frequency</Label>
-                <Select
-                  defaultValue={profile?.notification_frequency || "daily"}
-                  onValueChange={(v: string | null) => updateMutation.mutate({ notification_frequency: (v || "daily") as any })}
-                >
-                  <SelectTrigger className="bg-secondary/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="instant">Instant (every new event)</SelectItem>
-                    <SelectItem value="daily">Daily Digest</SelectItem>
-                    <SelectItem value="weekly">Weekly Summary</SelectItem>
-                  </SelectContent>
-                </Select>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Hackathons section */}
+            <div className="glass rounded-2xl p-6 border border-border/50 space-y-4">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-yellow-400" />
+                Hackathons
+              </h3>
+              <p className="text-sm text-muted-foreground">Select platforms to receive hackathon notifications from:</p>
+              <div className="space-y-3">
+                {[
+                  { id: "unstop", label: "Unstop" },
+                  { id: "devfolio", label: "Devfolio" },
+                  { id: "hackerearth", label: "HackerEarth" },
+                  { id: "hack2skill", label: "Hack2Skill" },
+                  { id: "devpost", label: "Devpost" },
+                ].map((platform) => (
+                  <label
+                    key={platform.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      selectedSources.includes(platform.id)
+                        ? "border-primary/50 bg-primary/10"
+                        : "border-border/30 glass hover:border-primary/30"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSources.includes(platform.id)}
+                      onChange={() => toggleItem(platform.id, selectedSources, setSelectedSources)}
+                      className="w-4 h-4 accent-primary"
+                      id={`source-${platform.id}`}
+                    />
+                    <span className="font-medium">{platform.label}</span>
+                    {selectedSources.includes(platform.id) && (
+                      <CheckCircle className="w-4 h-4 text-primary ml-auto" />
+                    )}
+                  </label>
+                ))}
               </div>
             </div>
+
+            {/* Competitive Programming section */}
+            <div className="glass rounded-2xl p-6 border border-border/50 space-y-4">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-blue-400" />
+                Competitive Programming
+              </h3>
+              <p className="text-sm text-muted-foreground">Select platforms to receive contest notifications from:</p>
+              <div className="space-y-3">
+                {[
+                  { id: "codeforces", label: "Codeforces" },
+                  { id: "codechef", label: "CodeChef" },
+                  { id: "leetcode", label: "LeetCode" },
+                  { id: "atcoder", label: "AtCoder" },
+                ].map((platform) => (
+                  <label
+                    key={platform.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      selectedSources.includes(platform.id)
+                        ? "border-blue-500/50 bg-blue-500/10"
+                        : "border-border/30 glass hover:border-blue-500/30"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSources.includes(platform.id)}
+                      onChange={() => toggleItem(platform.id, selectedSources, setSelectedSources)}
+                      className="w-4 h-4 accent-blue-500"
+                      id={`source-${platform.id}`}
+                    />
+                    <span className="font-medium">{platform.label}</span>
+                    {selectedSources.includes(platform.id) && (
+                      <CheckCircle className="w-4 h-4 text-blue-400 ml-auto" />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Notification frequency */}
+            <div className="glass rounded-2xl p-6 border border-border/50 space-y-4">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <Bell className="w-5 h-5 text-primary" />
+                Notification
+              </h3>
+              <label
+                className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                  hourlyEmail
+                    ? "border-primary/50 bg-primary/10"
+                    : "border-border/30 glass hover:border-primary/30"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={hourlyEmail}
+                  onChange={() => setHourlyEmail(!hourlyEmail)}
+                  className="w-4 h-4 accent-primary"
+                  id="hourly-email"
+                />
+                <div className="flex-1">
+                  <div className="font-medium">Send email every hour</div>
+                  <div className="text-sm text-muted-foreground">
+                    Receive an hourly digest of new opportunities matching your selected platforms
+                  </div>
+                </div>
+                {hourlyEmail && <CheckCircle className="w-4 h-4 text-primary shrink-0" />}
+              </label>
+            </div>
+
+            {/* Save button */}
+            <Button
+              onClick={savePreferences}
+              disabled={updateMutation.isPending}
+              className="w-full gradient-primary text-white border-0 py-5 text-base font-semibold"
+            >
+              {updateMutation.isPending
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...</>
+                : <><CheckCircle className="w-4 h-4 mr-2" /> Save Notification Preferences</>
+              }
+            </Button>
           </motion.div>
         </TabsContent>
+
 
         {/* Resume tab */}
         <TabsContent value="resume" className="space-y-4">

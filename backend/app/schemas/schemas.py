@@ -75,6 +75,7 @@ class ProfileUpdate(BaseModel):
     interested_domains: Optional[List[str]] = None
     programming_languages: Optional[List[str]] = None
     preferred_platforms: Optional[List[str]] = None
+    selected_sources: Optional[List[str]] = None
     email_notifications: Optional[bool] = None
     telegram_notifications: Optional[bool] = None
     notification_frequency: Optional[str] = None
@@ -90,10 +91,15 @@ class ProfileResponse(BaseModel):
     interested_domains: List[str] = []
     programming_languages: List[str] = []
     preferred_platforms: List[str] = []
+    selected_sources: List[str] = [
+        "unstop", "devfolio", "hackerearth", "hack2skill", "devpost",
+        "codeforces", "codechef", "leetcode", "atcoder",
+    ]
     email_notifications: bool = True
     telegram_notifications: bool = False
-    notification_frequency: str = "daily"
+    notification_frequency: str = "hourly"
     telegram_chat_id: Optional[str] = None
+    last_notification_time: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
