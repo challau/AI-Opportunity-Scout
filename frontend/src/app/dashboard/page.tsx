@@ -78,10 +78,10 @@ export default function DashboardPage() {
       >
         <div>
           <h1 className="text-3xl font-bold">
-            Dashboard <span className="gradient-text">🚀</span>
+            Welcome back! <span className="gradient-text">🚀</span>
           </h1>
           <p className="text-muted-foreground mt-1">
-            Your personalized opportunity feed — updated every hour
+            Your personalized opportunity feed — new events every 6 hours, digests to your inbox
           </p>
         </div>
         <Link href="/search">
