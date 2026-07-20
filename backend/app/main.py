@@ -58,10 +58,12 @@ def create_app() -> FastAPI:
     os.makedirs("uploads", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
 
-    # Disable API docs in production for security
-    docs_url = None if settings.is_production else "/docs"
-    redoc_url = None if settings.is_production else "/redoc"
-    openapi_url = None if settings.is_production else "/openapi.json"
+    # API docs: disable in production unless DOCS_ENABLED=true is set
+    import os
+    docs_enabled = not settings.is_production or os.getenv("DOCS_ENABLED", "").lower() == "true"
+    docs_url = "/docs" if docs_enabled else None
+    redoc_url = "/redoc" if docs_enabled else None
+    openapi_url = "/openapi.json" if docs_enabled else None
 
     app = FastAPI(
         title="AI Opportunity Scout API",
@@ -86,9 +88,14 @@ def create_app() -> FastAPI:
     )
 
     # ─── Middleware ───────────────────────────────────────────────────────────
+    # Build CORS origins: configured list + Railway/Vercel wildcard origins
+    cors_origins = list(settings.CORS_ORIGINS)
+    # In production, also allow any *.vercel.app and *.railway.app by regex
+    cors_origin_regex = r"https://(.*\.vercel\.app|.*\.railway\.app|localhost:\d+)" if settings.is_production else None
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=cors_origins,
+        allow_origin_regex=cors_origin_regex,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],

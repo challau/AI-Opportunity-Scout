@@ -9,15 +9,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright system deps (only if needed)
-RUN pip install --no-cache-dir playwright && playwright install --with-deps chromium
-
 # Create a non-root user for security
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
-# Python dependencies
+# Python dependencies (cached layer)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers only if explicitly enabled
+# Set PLAYWRIGHT_ENABLED=true in Railway env vars if needed
+ARG PLAYWRIGHT_ENABLED=false
+RUN if [ "$PLAYWRIGHT_ENABLED" = "true" ]; then \
+    playwright install --with-deps chromium; \
+    fi
 
 # Copy application code
 COPY . .
@@ -30,5 +34,5 @@ USER appuser
 
 EXPOSE 8000
 
-# Use gunicorn with uvicorn workers for production robustness
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--no-access-log"]
+# Use uvicorn for Railway (Railway manages process scaling separately)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
