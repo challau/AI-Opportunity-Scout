@@ -52,11 +52,22 @@ async def start_scheduler_async() -> None:
 
     logger.info("Attempting to start scheduler...")
 
-    # Initialize redis client
-    _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-    
-    # Attempt to acquire lock
-    lock_acquired = await acquire_lock(_redis_client, settings.SCHEDULER_LOCK_TTL_SECONDS)
+    # Initialize redis client and acquire lock — Redis being down must never
+    # crash the app, so fail into standby mode instead
+    try:
+        _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        lock_acquired = await asyncio.wait_for(
+            acquire_lock(_redis_client, settings.SCHEDULER_LOCK_TTL_SECONDS), timeout=5
+        )
+    except Exception as e:
+        logger.error("Scheduler could not reach Redis; running without scheduler", error=str(e))
+        if _redis_client:
+            try:
+                await _redis_client.aclose()
+            except Exception:
+                pass
+            _redis_client = None
+        return
     if not lock_acquired:
         owner, ttl = await get_lock_info(_redis_client)
         logger.warning(
@@ -179,13 +190,16 @@ async def get_scheduler_status_details() -> dict:
     lock_ttl = -1
     
     if _redis_client:
-        lock_owner, lock_ttl = await get_lock_info(_redis_client)
+        try:
+            lock_owner, lock_ttl = await asyncio.wait_for(get_lock_info(_redis_client), timeout=2)
+        except Exception:
+            pass
     else:
         # Check lock info independently
         try:
             temp_redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-            lock_owner, lock_ttl = await get_lock_info(temp_redis)
-            await temp_redis.close()
+            lock_owner, lock_ttl = await asyncio.wait_for(get_lock_info(temp_redis), timeout=2)
+            await temp_redis.aclose()
         except Exception:
             pass
 

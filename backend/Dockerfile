@@ -32,7 +32,11 @@ RUN mkdir -p uploads logs && chown -R appuser:appgroup /app
 # Switch to non-root user
 USER appuser
 
+# Ensure the start script is executable regardless of git file modes
+RUN chmod +x migrate.sh
+
 EXPOSE 8000
 
-# Use uvicorn for Railway (Railway manages process scaling separately)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
+# Shell form so $PORT (injected by Railway) is expanded; default 8000 locally.
+# Migrations run first but never block server start (see migrate.sh).
+CMD sh migrate.sh; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --no-access-log

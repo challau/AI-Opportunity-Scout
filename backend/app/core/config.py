@@ -1,8 +1,40 @@
 """Application configuration using Pydantic Settings."""
 
+import os
 from typing import List
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _normalize_async_db_url(url: str) -> str:
+    """Coerce any postgres URL into the asyncpg driver form SQLAlchemy needs.
+
+    Railway/Heroku-style URLs come as postgres:// or postgresql:// which load
+    psycopg2 (sync) and crash create_async_engine. asyncpg also rejects
+    libpq-style ?sslmode= — translate it to ?ssl=.
+    """
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    url = url.replace("sslmode=", "ssl=")
+    # asyncpg only understands a subset of ssl values; map verify modes to require
+    url = url.replace("ssl=verify-full", "ssl=require").replace("ssl=verify-ca", "ssl=require")
+    # channel_binding is a libpq-only param asyncpg rejects
+    if "channel_binding=" in url:
+        import re
+        url = re.sub(r"[?&]channel_binding=[^&]*", "", url)
+    return url
+
+
+def _normalize_sync_db_url(url: str) -> str:
+    """Coerce any postgres URL into the plain psycopg2 form Alembic uses."""
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    # psycopg2 uses sslmode=, not ssl=
+    url = url.replace("?ssl=require", "?sslmode=require").replace("&ssl=require", "&sslmode=require")
+    return url
 
 
 class Settings(BaseSettings):
@@ -99,8 +131,26 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
             import json
-            return json.loads(v)
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # Tolerate plain comma-separated values
+                return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def normalize_database_urls(self):
+        # Detect Railway: treat its environment as production unless APP_ENV
+        # was set explicitly.
+        if os.getenv("RAILWAY_ENVIRONMENT") and not os.getenv("APP_ENV"):
+            self.APP_ENV = os.getenv("RAILWAY_ENVIRONMENT_NAME", "production") or "production"
+        # Railway injects DATABASE_URL as postgres://...; derive both driver
+        # variants from whatever we were given so migrations and runtime work.
+        raw = self.DATABASE_URL or self.DATABASE_URL_SYNC
+        sync_raw = os.getenv("DATABASE_URL_SYNC") or raw
+        self.DATABASE_URL = _normalize_async_db_url(raw)
+        self.DATABASE_URL_SYNC = _normalize_sync_db_url(sync_raw)
+        return self
 
     @property
     def is_production(self) -> bool:

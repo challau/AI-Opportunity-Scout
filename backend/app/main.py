@@ -30,19 +30,24 @@ async def lifespan(app: FastAPI):
     # Validate that production secrets have been properly configured
     settings.validate_production_settings()
 
-    # Verify Redis connection
+    # Verify Redis connection — non-fatal and bounded so a slow/unreachable
+    # Redis never delays startup or the healthcheck
+    import asyncio
     import redis.asyncio as aioredis
     try:
         r = aioredis.from_url(settings.REDIS_URL)
-        await r.ping()
+        await asyncio.wait_for(r.ping(), timeout=3)
         logger.info("Connected to Redis successfully")
-        await r.close()
+        await r.aclose()
     except Exception as e:
-        logger.error("Failed to connect to Redis", error=str(e))
+        logger.error("Failed to connect to Redis (continuing without it)", error=str(e))
 
-    # Start background scheduler
-    start_scheduler()
-    logger.info("Scheduler started")
+    # Start background scheduler (spawns its own task; never blocks startup)
+    try:
+        start_scheduler()
+        logger.info("Scheduler started")
+    except Exception as e:
+        logger.error("Scheduler failed to start (continuing)", error=str(e))
 
     yield
 
@@ -125,13 +130,26 @@ def create_app() -> FastAPI:
     # ─── Health Check ─────────────────────────────────────────────────────────
     @app.get("/health", tags=["Health"])
     async def health_check():
-        from app.scheduler.scheduler import get_scheduler_status_details
-        scheduler_status = await get_scheduler_status_details()
+        # Must return 200 immediately — no Redis/DB/scheduler lookups here,
+        # Railway's healthcheck gates the whole deployment on this endpoint.
         return {
             "status": "healthy",
             "app": settings.APP_NAME,
             "version": settings.APP_VERSION,
-            "scheduler": scheduler_status
+        }
+
+    @app.get("/health/detailed", tags=["Health"])
+    async def health_check_detailed():
+        from app.scheduler.scheduler import get_scheduler_status_details
+        try:
+            scheduler_status = await get_scheduler_status_details()
+        except Exception as e:
+            scheduler_status = {"status": "unknown", "error": str(e)}
+        return {
+            "status": "healthy",
+            "app": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "scheduler": scheduler_status,
         }
 
     return app
