@@ -731,7 +731,7 @@ async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
                 try:
                     ok = await email_service.send_email(
                         to_email=user.email,
-                        subject="🚀 New Opportunities Matching Your Preferences",
+                        subject="🚀 New Hackathons & Coding Contests",
                         html_content=html,
                         text_content=text,
                     )

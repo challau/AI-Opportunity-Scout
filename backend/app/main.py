@@ -16,7 +16,7 @@ from app.database.session import engine
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.scheduler.scheduler import start_scheduler, shutdown_scheduler
+from app.scheduler.scheduler import start_scheduler
 
 logger = structlog.get_logger()
 
@@ -51,8 +51,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup
-    shutdown_scheduler()
+    # Cleanup — await lock release so the next deploy can take over immediately
+    from app.scheduler.scheduler import shutdown_scheduler_async
+    try:
+        await asyncio.wait_for(shutdown_scheduler_async(), timeout=10)
+    except Exception as e:
+        logger.error("Scheduler shutdown error", error=str(e))
     await engine.dispose()
     logger.info("Application shutdown complete")
 

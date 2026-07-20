@@ -42,6 +42,26 @@ async def _refresh_lock_loop():
             await asyncio.sleep(5)  # Quick retry on error
 
 
+async def _retry_lock_loop():
+    """Keep retrying lock acquisition (e.g. after a redeploy left a stale lock)."""
+    global _redis_client, _lock_refresh_task, _scheduler
+    while _scheduler is None:
+        await asyncio.sleep(60)
+        try:
+            if _redis_client is None:
+                _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+            acquired = await asyncio.wait_for(
+                acquire_lock(_redis_client, settings.SCHEDULER_LOCK_TTL_SECONDS), timeout=5
+            )
+            if acquired:
+                logger.info("Scheduler lock acquired on retry; starting scheduler")
+                _lock_refresh_task = asyncio.create_task(_refresh_lock_loop())
+                _start_scheduler_jobs()
+                return
+        except Exception as e:
+            logger.warning("Scheduler lock retry failed", error=str(e))
+
+
 async def start_scheduler_async() -> None:
     """Async startup helper for scheduler."""
     global _scheduler, _lock_refresh_task, _redis_client
@@ -71,16 +91,24 @@ async def start_scheduler_async() -> None:
     if not lock_acquired:
         owner, ttl = await get_lock_info(_redis_client)
         logger.warning(
-            "Scheduler lock is held by another instance. Running in standby mode.",
+            "Scheduler lock is held by another instance. Will retry until it expires.",
             owner=owner,
             ttl=ttl
         )
-        await _redis_client.close()
-        _redis_client = None
+        # The previous deploy's container rarely releases its lock (it gets
+        # SIGKILLed), so retry in the background instead of standing by forever.
+        asyncio.create_task(_retry_lock_loop())
         return
 
     # Start lock refresh loop
     _lock_refresh_task = asyncio.create_task(_refresh_lock_loop())
+
+    _start_scheduler_jobs()
+
+
+def _start_scheduler_jobs() -> None:
+    """Create the AsyncIOScheduler, register all jobs, and start it."""
+    global _scheduler
 
     _scheduler = AsyncIOScheduler(timezone=timezone(settings.SCHEDULER_TIMEZONE))
 
