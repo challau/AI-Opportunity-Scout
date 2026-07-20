@@ -122,14 +122,20 @@ flowchart TD
 
 ## 📸 Screenshots
 
-### Dashboard
-![Dashboard](screenshots/dashboard.png)
+### Dashboard — your personalized opportunity feed
+![Dashboard — personalized opportunity feed with AI-ranked events](screenshots/dashboard.png)
 
-### Notifications
-![Notifications](screenshots/notifications.png)
+*Live stats (today's events, upcoming deadlines, saved events, alerts) above an AI-ranked feed. Every card shows the platform, prize, tags, and an AI quality score (0–100) with one-click **Register** and **Save** actions.*
 
-### Email Alerts
-![Email](screenshots/email.png)
+### Notification Preferences — pick your platforms
+![Notification preferences — per-platform hackathon and contest toggles](screenshots/notifications.png)
+
+*Users choose exactly which sources they care about — five hackathon platforms and four competitive-programming judges — with a single toggle for the 6-hourly email digest. Preferences drive what each user's digest contains.*
+
+### Email Digest — opportunities delivered to your inbox
+![Email digest — personalized hackathon and contest alerts](screenshots/email.png)
+
+*The actual digest email: each new opportunity arrives with its platform, start date, deadline, prize, eligibility, and a direct registration link. Sent only when new events match the user's selected platforms — never spam, never repeats.*
 
 ---
 
