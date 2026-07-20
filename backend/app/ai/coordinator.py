@@ -139,13 +139,31 @@ class AICoordinator:
 
         # Check if user is asking for specific events
         suggested_events = []
-        if any(kw in message.lower() for kw in ["find", "show", "hackathon", "contest", "internship", "recommend"]):
-            events, _ = await repo.keyword_search(
-                query_str=message,
-                page=1,
-                page_size=5,
-            )
-            suggested_events = [EventResponse.model_validate(e) for e in events]
+        if any(kw in message.lower() for kw in ["find", "show", "hackathon", "contest", "internship", "recommend", "opportunit", "event"]):
+            # Search meaningful keywords, not the raw sentence — a full
+            # sentence never matches as one ILIKE substring
+            stopwords = {
+                "find", "show", "me", "a", "an", "the", "with", "for", "in", "on",
+                "of", "to", "any", "some", "all", "new", "latest", "upcoming",
+                "recommend", "please", "list", "give", "get", "what", "which",
+                "are", "is", "there", "money", "and", "or",
+            }
+            keywords = [w for w in message.lower().split() if w.strip("?.,!") not in stopwords]
+            seen_ids = set()
+            events = []
+            for kw in (keywords or ["hackathon"])[:4]:
+                found, _ = await repo.keyword_search(
+                    query_str=kw.strip("?.,!"),
+                    page=1,
+                    page_size=5,
+                )
+                for e in found:
+                    if e.id not in seen_ids:
+                        seen_ids.add(e.id)
+                        events.append(e)
+                if len(events) >= 5:
+                    break
+            suggested_events = [EventResponse.model_validate(e) for e in events[:5]]
 
             if suggested_events:
                 event_context = "\n".join([
