@@ -1,0 +1,212 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: 222 47% 6%;
+  --foreground: 210 40% 96%;
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 96%;
+  --popover: 222 47% 9%;
+  --popover-foreground: 210 40% 96%;
+  --primary: 251 91% 69%;
+  --primary-foreground: 222 47% 6%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 96%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 55%;
+  --accent: 267 83% 65%;
+  --accent-foreground: 222 47% 6%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 96%;
+  --border: 217 33% 22%;
+  --input: 217 33% 22%;
+  --ring: 251 91% 69%;
+  --radius: 0.75rem;
+  --sidebar-background: 222 47% 8%;
+  --sidebar-border: 217 33% 16%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+* {
+  border-color: hsl(var(--border));
+  box-sizing: border-box;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* ── Gradients ─────────────────────────────────────────────────────────────── */
+.gradient-primary {
+  background: linear-gradient(135deg, hsl(251 91% 69%) 0%, hsl(267 83% 65%) 100%);
+}
+
+.gradient-card {
+  background: linear-gradient(
+    145deg,
+    hsl(222 47% 11%) 0%,
+    hsl(222 47% 8%) 100%
+  );
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Glass Effect ──────────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(30, 30, 60, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Glow Effects ──────────────────────────────────────────────────────────── */
+.glow-primary {
+  box-shadow: 0 0 30px rgba(129, 140, 248, 0.15);
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 25px rgba(129, 140, 248, 0.2);
+  transition: box-shadow 0.3s ease;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+.sidebar {
+  background: hsl(var(--sidebar-background));
+  border-right: 1px solid hsl(var(--sidebar-border));
+}
+
+/* ── Animations ────────────────────────────────────────────────────────────── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(129, 140, 248, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(129, 140, 248, 0.4); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+.skeleton-loading {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--secondary)) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Platform Colors ───────────────────────────────────────────────────────── */
+.platform-unstop { color: #f59e0b; }
+.platform-devfolio { color: #3b82f6; }
+.platform-hackerearth { color: #8b5cf6; }
+.platform-codeforces { color: #ef4444; }
+.platform-codechef { color: #f97316; }
+.platform-kaggle { color: #20beff; }
+.platform-devpost { color: #003e54; }
+.platform-google { color: #4285f4; }
+.platform-microsoft { color: #00a4ef; }
+.platform-mlh { color: #ff0000; }
+.platform-gsoc { color: #4285f4; }
+.platform-gssoc { color: #059669; }
+.platform-github { color: #e5e7eb; }
+.platform-ieee { color: #00629b; }
+
+/* ── Event Type Colors ─────────────────────────────────────────────────────── */
+.type-hackathon { @apply bg-violet-500/20 text-violet-300 border-violet-500/30; }
+.type-contest { @apply bg-blue-500/20 text-blue-300 border-blue-500/30; }
+.type-internship { @apply bg-green-500/20 text-green-300 border-green-500/30; }
+.type-workshop { @apply bg-amber-500/20 text-amber-300 border-amber-500/30; }
+.type-competition { @apply bg-red-500/20 text-red-300 border-red-500/30; }
+.type-quiz { @apply bg-cyan-500/20 text-cyan-300 border-cyan-500/30; }
+.type-open_source { @apply bg-emerald-500/20 text-emerald-300 border-emerald-500/30; }
+.type-hiring { @apply bg-pink-500/20 text-pink-300 border-pink-500/30; }
+.type-conference { @apply bg-orange-500/20 text-orange-300 border-orange-500/30; }

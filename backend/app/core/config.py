@@ -1,0 +1,133 @@
+"""Application configuration using Pydantic Settings."""
+
+from typing import List
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"),
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+    # ─── Application ──────────────────────────────────────────────────────────
+    APP_NAME: str = "AI Opportunity Scout"
+    APP_VERSION: str = "1.0.0"
+    APP_ENV: str = "development"
+    APP_URL: str = "http://localhost:3000"
+    API_URL: str = "http://localhost:8000"
+    API_V1_PREFIX: str = "/api"
+    SECRET_KEY: str = "change-me-in-production-min-32-chars"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # ─── Database ─────────────────────────────────────────────────────────────
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "ai_opportunity_scout"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_opportunity_scout"
+    DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@localhost:5432/ai_opportunity_scout"
+
+    # ─── Redis ────────────────────────────────────────────────────────────────
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # ─── OpenAI ───────────────────────────────────────────────────────────────
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    # ─── Google OAuth ─────────────────────────────────────────────────────────
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/google/callback"
+
+    # ─── GitHub OAuth ─────────────────────────────────────────────────────────
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/github/callback"
+
+    # ─── Email ────────────────────────────────────────────────────────────────
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "noreply@aiopportunityscout.com"
+    SMTP_FROM_NAME: str = "AI Opportunity Scout"
+    SENDGRID_API_KEY: str = ""
+
+    # ─── Telegram ─────────────────────────────────────────────────────────────
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_WEBHOOK_URL: str = ""
+
+    # ─── Scheduler ────────────────────────────────────────────────────────────
+    SCHEDULER_ENABLED: bool = False
+    SCHEDULER_TIMEZONE: str = "UTC"
+    SCHEDULER_INTERVAL_HOURS: int = 6
+    SCHEDULER_DAILY_DIGEST_HOUR: int = 8
+    SCHEDULER_DAILY_DIGEST_MINUTE: int = 0
+    SCHEDULER_REMINDER_HOUR: int = 7
+    SCHEDULER_REMINDER_MINUTE: int = 0
+    SCHEDULER_MAX_CRAWL_RETRIES: int = 3
+    SCHEDULER_CRAWL_RETRY_DELAY_SECONDS: int = 300
+    SCHEDULER_LOCK_TTL_SECONDS: int = 3600
+
+    # ─── Crawling ─────────────────────────────────────────────────────────────
+    PLAYWRIGHT_HEADLESS: bool = True
+    CRAWL_TIMEOUT: int = 30
+    MAX_RETRIES: int = 3
+    RATE_LIMIT_DELAY: float = 2.0
+
+    # ─── File Storage ─────────────────────────────────────────────────────────
+    UPLOAD_DIR: str = "uploads"
+    MAX_FILE_SIZE_MB: int = 10
+
+    # ─── CORS ─────────────────────────────────────────────────────────────────
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+
+    # ─── Logging ──────────────────────────────────────────────────────────────
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "logs/app.log"
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            import json
+            return json.loads(v)
+        return v
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV == "production"
+
+    @property
+    def is_development(self) -> bool:
+        return self.APP_ENV == "development"
+
+    @property
+    def scheduler_should_run(self) -> bool:
+        return self.SCHEDULER_ENABLED or self.is_production
+
+    def validate_production_settings(self) -> None:
+        """Raise if dangerous defaults remain in a production environment."""
+        if self.is_production:
+            dangerous_defaults = [
+                "change-me-in-production",
+                "your-super-secret",
+                "secret",
+            ]
+            for placeholder in dangerous_defaults:
+                if placeholder in self.SECRET_KEY.lower():
+                    raise RuntimeError(
+                        "SECRET_KEY must be changed from the default before running in production! "
+                        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                    )
+
+
+settings = Settings()
