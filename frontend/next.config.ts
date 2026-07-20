@@ -1,8 +1,22 @@
 import type { NextConfig } from "next";
 
+const BACKEND_URL =
+  process.env.BACKEND_URL || "https://ai-opportunity-scout-production.up.railway.app";
+
 const nextConfig: NextConfig = {
   // Standalone output — optimal for Vercel and containerized deployments
   output: "standalone",
+
+  // Proxy API calls through this domain so browsers never contact Railway
+  // directly (single public URL; also dodges DNS/firewall issues with
+  // *.railway.app on some networks).
+  async rewrites() {
+    return [
+      { source: "/api/:path*", destination: `${BACKEND_URL}/api/:path*` },
+      { source: "/health", destination: `${BACKEND_URL}/health` },
+      { source: "/uploads/:path*", destination: `${BACKEND_URL}/uploads/:path*` },
+    ];
+  },
 
   // Disable TypeScript build errors (type-check separately)
   typescript: {

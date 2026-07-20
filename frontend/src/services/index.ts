@@ -16,7 +16,7 @@ export const authService = {
 
   getMe: async (): Promise<User> => (await api.get("/auth/me")).data,
 
-  getGoogleAuthUrl: () => `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`,
+  getGoogleAuthUrl: () => `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/auth/google`,
 };
 
 // ─── Events service ─────────────────────────────────────────────────────────────

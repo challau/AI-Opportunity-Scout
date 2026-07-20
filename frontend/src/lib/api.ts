@@ -2,7 +2,9 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
 import { TokenResponse } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Same-origin by default: API calls go to this domain and Next.js rewrites
+// proxy them to the backend. Set NEXT_PUBLIC_API_URL only for local dev.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
