@@ -97,14 +97,15 @@ def create_app() -> FastAPI:
     )
 
     # ─── Middleware ───────────────────────────────────────────────────────────
-    # Build CORS origins: configured list + Railway/Vercel wildcard origins
+    # CORS: only the configured origins (production frontend + localhost dev).
+    # Requests proxied through the Vercel rewrite are same-origin and don't
+    # need CORS at all; this guards direct browser calls.
     cors_origins = list(settings.CORS_ORIGINS)
-    # In production, also allow any *.vercel.app and *.railway.app by regex
-    cors_origin_regex = r"https://(.*\.vercel\.app|.*\.railway\.app|localhost:\d+)" if settings.is_production else None
+    if "https://ai-opportunity-scout-pi.vercel.app" not in cors_origins:
+        cors_origins.append("https://ai-opportunity-scout-pi.vercel.app")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_origin_regex=cors_origin_regex,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],

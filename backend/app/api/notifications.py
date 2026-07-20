@@ -166,6 +166,20 @@ async def send_test_email(db: AsyncSession = Depends(get_db)):
 
     recipient = settings.NOTIFICATION_EMAIL or "challaudaykumar1@gmail.com"
 
+    # Rate-limit: this endpoint is public and each call sends a real email
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        allowed = await r.set("notifications:test_email_cooldown", "1", ex=300, nx=True)
+        await r.aclose()
+        if not allowed:
+            return {
+                "status": "error",
+                "message": "A test email was sent recently. Try again in a few minutes.",
+            }
+    except Exception:
+        pass  # Redis down — proceed rather than block
+
     missing = [
         name for name, value in [
             ("SMTP_HOST", settings.SMTP_HOST),

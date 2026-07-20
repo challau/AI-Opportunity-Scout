@@ -169,8 +169,26 @@ async def get_scheduler_logs(
 
 @router.post("/trigger-hourly-public")
 async def trigger_hourly_public():
-    """Public manual trigger for hourly opportunity notifications (useful for deployment tests)."""
+    """Manual trigger for the opportunity digest job, rate-limited via Redis
+    so public access can't be abused (at most one trigger per 10 minutes)."""
     import asyncio
+    import redis.asyncio as aioredis
+    from app.core.config import settings
+
+    try:
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        allowed = await r.set("scheduler:manual_trigger_cooldown", "1", ex=600, nx=True)
+        await r.aclose()
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Digest was triggered recently. Try again in a few minutes.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Redis down — allow the trigger rather than block it
+
     asyncio.create_task(run_hourly_notifications("manual"))
     return {"message": "Hourly opportunity notifications triggered in background."}
 

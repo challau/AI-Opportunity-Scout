@@ -549,6 +549,7 @@ def _hourly_personalized_digest_email(user_name: str, recipient: str, matched_ev
                 f"   Start date: {fmt(e.event_start_date)}",
                 f"   Deadline: {fmt(e.registration_deadline)}",
                 f"   Prize: {e.prize or 'Not specified'}",
+                f"   Eligibility: {e.eligibility or 'Open to all'}",
                 f"   Link: {e.registration_url}",
                 "",
             ]
@@ -574,6 +575,7 @@ def _hourly_personalized_digest_email(user_name: str, recipient: str, matched_ev
                     ("Start date", fmt(e.event_start_date)),
                     ("Deadline", fmt(e.registration_deadline)),
                     ("Prize", e.prize or "Not specified"),
+                    ("Eligibility", (e.eligibility or "Open to all")[:120]),
                 ]
             )
             cards.append(
