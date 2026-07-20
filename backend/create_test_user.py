@@ -9,8 +9,10 @@ import asyncio
 import sys
 import os
 
-# Ensure the backend app module is on the path
+# Ensure the backend app module and virtualenv packages are on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, "/Users/challaudaykumar/Desktop/AI-Opportunity-Scout/backend/venv/lib/python3.11/site-packages")
+
 
 
 async def main():
@@ -21,54 +23,71 @@ async def main():
     from app.core.security import hash_password
     from app.repositories.user_repository import UserRepository
 
-    TEST_EMAIL = "challaudaykumar1@gmail.com"
-    TEST_USERNAME = "udaykumar"
-    TEST_FULL_NAME = "Uday Kumar"
-    TEST_PASSWORD = "Scout@2026!"
+    users_to_create = [
+        {
+            "email": "challaudaykumar1@gmail.com",
+            "username": "udaykumar",
+            "full_name": "Uday Kumar",
+            "password": "Scout@2026!",
+            "selected_sources": [
+                "unstop", "devfolio", "hackerearth", "hack2skill", "devpost",
+                "codeforces", "codechef", "leetcode", "atcoder",
+            ]
+        },
+        {
+            "email": "user1@test.com",
+            "username": "user1",
+            "full_name": "Competitive Programmer User 1",
+            "password": "Scout@2026!",
+            "selected_sources": ["codeforces", "leetcode"]
+        },
+        {
+            "email": "user2@test.com",
+            "username": "user2",
+            "full_name": "Hackathon Developer User 2",
+            "password": "Scout@2026!",
+            "selected_sources": ["unstop", "devfolio"]
+        }
+    ]
 
     print(f"Connecting to database: {settings.DATABASE_URL_SYNC[:50]}...")
 
     async with AsyncSessionLocal() as db:
         repo = UserRepository(db)
 
-        # Check if user already exists
-        existing = await repo.get_by_email(TEST_EMAIL)
-        if existing:
-            print(f"✅ Test user already exists: {TEST_EMAIL}")
-            print(f"   Username: {existing.username}")
-            print(f"   Active: {existing.is_active}")
-            return
+        for udata in users_to_create:
+            existing = await repo.get_by_email(udata["email"])
+            if existing:
+                print(f"✅ User already exists: {udata['email']}")
+                continue
 
-        # Create user
-        user = User(
-            email=TEST_EMAIL,
-            username=TEST_USERNAME,
-            full_name=TEST_FULL_NAME,
-            hashed_password=hash_password(TEST_PASSWORD),
-            is_active=True,
-            is_verified=True,
-        )
-        user = await repo.create(user)
+            # Create user
+            user = User(
+                email=udata["email"],
+                username=udata["username"],
+                full_name=udata["full_name"],
+                hashed_password=hash_password(udata["password"]),
+                is_active=True,
+                is_verified=True,
+            )
+            user = await repo.create(user)
 
-        # Create profile with all sources enabled + hourly notifications
-        profile = UserProfile(
-            user_id=user.id,
-            email_notifications=True,
-            notification_frequency="hourly",
-            selected_sources=[
-                "unstop", "devfolio", "hackerearth", "hack2skill", "devpost",
-                "codeforces", "codechef", "leetcode", "atcoder",
-            ],
-        )
-        db.add(profile)
-        await db.commit()
+            # Create profile
+            profile = UserProfile(
+                user_id=user.id,
+                email_notifications=True,
+                notification_enabled=True,
+                notification_frequency="hourly",
+                selected_sources=udata["selected_sources"],
+            )
+            db.add(profile)
+            await db.commit()
 
-        print(f"✅ Test user created successfully!")
-        print(f"   Email:    {TEST_EMAIL}")
-        print(f"   Username: {TEST_USERNAME}")
-        print(f"   Password: {TEST_PASSWORD}")
-        print(f"   User ID:  {user.id}")
+            print(f"✅ User {udata['email']} created successfully!")
+            print(f"   Username: {udata['username']}")
+            print(f"   Preferences: {udata['selected_sources']}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+

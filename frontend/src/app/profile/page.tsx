@@ -109,6 +109,7 @@ export default function ProfilePage() {
       selected_sources: selectedSources,
       notification_frequency: hourlyEmail ? "hourly" : "daily",
       email_notifications: true,
+      notification_enabled: true,
     });
   };
 

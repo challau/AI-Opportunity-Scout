@@ -69,3 +69,11 @@ def create_password_reset_token(email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=1)
     data: dict[str, Any] = {"sub": email, "type": "password_reset", "exp": expire}
     return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_email_verification_token(email: str) -> str:
+    """Create a short-lived email verification token."""
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    data: dict[str, Any] = {"sub": email, "type": "email_verification", "exp": expire}
+    return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+

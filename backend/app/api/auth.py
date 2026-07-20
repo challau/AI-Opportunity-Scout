@@ -9,6 +9,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     create_password_reset_token,
+    create_email_verification_token,
     decode_token,
     hash_password,
     verify_password,
@@ -329,3 +330,171 @@ async def github_oauth_callback(code: str, db: AsyncSession = Depends(get_db)):
         await db.commit()
 
     return _build_token_response(str(user.id))
+
+
+from fastapi.responses import HTMLResponse
+
+@router.post("/send-verification-email")
+async def send_verification_email(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Send an email verification link to the logged-in user."""
+    token = create_email_verification_token(current_user.email)
+    verify_url = f"{settings.API_URL}/api/auth/verify-email?token={token}"
+    
+    email_service = EmailService()
+    subject = "Verify your email address - AI Opportunity Scout"
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html><body style="margin:0;padding:0;background:#0f0f1a;font-family:'Segoe UI',Arial,sans-serif;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;">
+      <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px 16px 0 0;padding:32px 28px;text-align:center;">
+        <h1 style="color:#fff;font-size:22px;margin:0;">🚀 AI Opportunity Scout</h1>
+      </div>
+      <div style="background:#1a1a2e;padding:24px;border-radius:0 0 16px 16px;border:1px solid #3a3a5c;">
+        <p style="color:#e2e8f0;font-size:16px;">Hello {current_user.full_name},</p>
+        <p style="color:#94a3b8;font-size:15px;line-height:1.5;">Please verify your email address to activate your account and start receiving hourly digests of new hackathons and coding contests.</p>
+        <div style="text-align:center;margin:30px 0;">
+          <a href="{verify_url}" style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Verify Email</a>
+        </div>
+        <p style="color:#64748b;font-size:13px;word-break:break-all;">Or copy and paste this link in your browser:<br/>{verify_url}</p>
+      </div>
+    </div>
+    </body></html>
+    """
+    text = f"Hello {current_user.full_name},\n\nPlease verify your email address by clicking the following link:\n{verify_url}"
+    
+    ok = await email_service.send_email(
+        to_email=current_user.email,
+        subject=subject,
+        html_content=html,
+        text_content=text
+    )
+    if ok:
+        return {"status": "success", "message": "Verification email sent"}
+    raise HTTPException(status_code=500, detail="Failed to send verification email")
+
+
+@router.get("/verify-email", response_class=HTMLResponse)
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    """Verify email verification token and update user's is_verified status."""
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "email_verification":
+        return HTMLResponse(
+            content="<h3>Invalid or expired token</h3>",
+            status_code=400
+        )
+    
+    email = payload.get("sub")
+    repo = UserRepository(db)
+    user = await repo.get_by_email(email)
+    if not user:
+        return HTMLResponse(
+            content="<h3>User not found</h3>",
+            status_code=404
+        )
+        
+    user.is_verified = True
+    await db.commit()
+    
+    frontend_url = settings.APP_URL or "https://ai-opportunity-scout-pi.vercel.app"
+    
+    return HTMLResponse(
+        content=f"""
+        <html>
+        <head>
+            <title>Email Verified</title>
+            <style>
+                body {{ font-family: sans-serif; background-color: #0f0f1a; color: #e2e8f0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+                .card {{ background-color: #1a1a2e; border: 1px solid #3a3a5c; padding: 40px; border-radius: 16px; text-align: center; max-width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }}
+                h1 {{ color: #a78bfa; margin-bottom: 20px; }}
+                p {{ color: #94a3b8; font-size: 16px; line-height: 1.5; }}
+                .btn {{ display: inline-block; margin-top: 25px; padding: 12px 24px; background: linear-gradient(135deg,#6366f1,#8b5cf6); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Email Verified successfully!</h1>
+                <p>Thank you for verifying your email address.</p>
+                <p>Your account is now fully active, and you're ready to receive customized opportunity notifications.</p>
+                <a href="{frontend_url}/profile" class="btn">Go to Profile</a>
+            </div>
+        </body>
+        </html>
+        """
+    )
+
+
+@router.post("/setup-test-users")
+async def setup_test_users(db: AsyncSession = Depends(get_db)):
+    """Seed test users into the database (challaudaykumar1@gmail.com, user1@test.com, user2@test.com)"""
+    from app.core.security import hash_password
+    from app.repositories.user_repository import UserRepository
+    
+    users_to_create = [
+        {
+            "email": "challaudaykumar1@gmail.com",
+            "username": "udaykumar",
+            "full_name": "Uday Kumar",
+            "password": "Scout@2026!",
+            "selected_sources": [
+                "unstop", "devfolio", "hackerearth", "hack2skill", "devpost",
+                "codeforces", "codechef", "leetcode", "atcoder",
+            ]
+        },
+        {
+            "email": "user1@test.com",
+            "username": "user1",
+            "full_name": "Competitive Programmer User 1",
+            "password": "Scout@2026!",
+            "selected_sources": ["codeforces", "leetcode"]
+        },
+        {
+            "email": "user2@test.com",
+            "username": "user2",
+            "full_name": "Hackathon Developer User 2",
+            "password": "Scout@2026!",
+            "selected_sources": ["unstop", "devfolio"]
+        }
+    ]
+    
+    created = []
+    already_exists = []
+    
+    repo = UserRepository(db)
+    for udata in users_to_create:
+        existing = await repo.get_by_email(udata["email"])
+        if existing:
+            already_exists.append(udata["email"])
+            continue
+            
+        user = User(
+            email=udata["email"],
+            username=udata["username"],
+            full_name=udata["full_name"],
+            hashed_password=hash_password(udata["password"]),
+            is_active=True,
+            is_verified=True,
+        )
+        user = await repo.create(user)
+        
+        profile = UserProfile(
+            user_id=user.id,
+            email_notifications=True,
+            notification_enabled=True,
+            notification_frequency="hourly",
+            selected_sources=udata["selected_sources"],
+        )
+        db.add(profile)
+        created.append(udata["email"])
+        
+    await db.commit()
+    return {
+        "status": "success",
+        "created": created,
+        "already_exists": already_exists
+    }
+
+

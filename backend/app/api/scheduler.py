@@ -165,3 +165,12 @@ async def get_scheduler_logs(
         "page_size": page_size,
         "logs": logs_data
     }
+
+
+@router.post("/trigger-hourly-public")
+async def trigger_hourly_public():
+    """Public manual trigger for hourly opportunity notifications (useful for deployment tests)."""
+    import asyncio
+    asyncio.create_task(run_hourly_notifications("manual"))
+    return {"message": "Hourly opportunity notifications triggered in background."}
+

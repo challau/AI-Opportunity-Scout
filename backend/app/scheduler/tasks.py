@@ -529,10 +529,11 @@ def _parse_dt(value):
     return None
 
 
-def _hourly_digest_email(new_events: list) -> tuple[str, str]:
-    """Build (text, html) digest for newly discovered events."""
-    hackathons = [e for e in new_events if e.platform in HACKATHON_SET]
-    contests = [e for e in new_events if e.platform not in HACKATHON_SET]
+def _hourly_personalized_digest_email(user_name: str, recipient: str, matched_events: list) -> tuple[str, str]:
+    """Build personalized (text, html) digest for a specific user."""
+    from app.core.config import settings
+    hackathons = [e for e in matched_events if e.platform in HACKATHON_SET]
+    contests = [e for e in matched_events if e.platform not in HACKATHON_SET]
 
     def fmt(dt):
         return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "Check website"
@@ -548,17 +549,18 @@ def _hourly_digest_email(new_events: list) -> tuple[str, str]:
                 f"   Start date: {fmt(e.event_start_date)}",
                 f"   Deadline: {fmt(e.registration_deadline)}",
                 f"   Prize: {e.prize or 'Not specified'}",
-                f"   Eligibility: {e.eligibility or 'Open to all'}",
                 f"   Link: {e.registration_url}",
                 "",
             ]
         return lines
 
+    unsubscribe_url = f"{settings.API_URL}/api/users/unsubscribe?email={recipient}"
+
     text = "\n".join(
-        ["Hello,", "", "New opportunities found in the last scan:", ""]
+        [f"Hello {user_name or 'there'},", "", "New opportunities matching your preferences:", ""]
         + text_block(hackathons, "🔥 New Hackathons")
         + text_block(contests, "⚔ New Coding Contests")
-        + ["=" * 20]
+        + ["=" * 20, "", f"Want to stop receiving these? Unsubscribe here: {unsubscribe_url}"]
     )
 
     def html_cards(events):
@@ -572,7 +574,6 @@ def _hourly_digest_email(new_events: list) -> tuple[str, str]:
                     ("Start date", fmt(e.event_start_date)),
                     ("Deadline", fmt(e.registration_deadline)),
                     ("Prize", e.prize or "Not specified"),
-                    ("Eligibility", (e.eligibility or "Open to all")[:120]),
                 ]
             )
             cards.append(
@@ -597,17 +598,20 @@ def _hourly_digest_email(new_events: list) -> tuple[str, str]:
         '<div style="max-width:600px;margin:0 auto;padding:20px;">'
         '<div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:16px 16px 0 0;'
         'padding:32px 28px;text-align:center;">'
-        '<h1 style="color:#fff;font-size:22px;margin:0;">🚀 AI Opportunity Scout</h1>'
-        '<p style="color:rgba(255,255,255,0.85);margin:6px 0 0;">New opportunities found</p></div>'
+        f'<h1 style="color:#fff;font-size:22px;margin:0;">🚀 AI Opportunity Scout</h1>'
+        f'<p style="color:rgba(255,255,255,0.85);margin:6px 0 0;">Personalized opportunities digest</p></div>'
         f'<div style="background:#1a1a2e;padding:24px;">{sections}</div>'
-        '<div style="background:#0f0f1a;padding:16px;text-align:center;color:#64748b;font-size:12px;'
-        'border-radius:0 0 16px 16px;">AI Opportunity Scout · hourly scan</div></div></body></html>'
+        f'<div style="background:#0f0f1a;padding:16px;text-align:center;color:#64748b;font-size:12px;'
+        f'border-radius:0 0 16px 16px;">'
+        f'AI Opportunity Scout · hourly scan<br/>'
+        f'Want to stop receiving these? <a href="{unsubscribe_url}" style="color:#a78bfa;text-decoration:underline;">Unsubscribe here</a>.</div>'
+        '</div></body></html>'
     )
     return text, html
 
 
 async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
-    """Crawl target platforms, store deduplicated events, email users about NEW ones."""
+    """Crawl target platforms, store deduplicated events, email active users personalized notifications."""
     from app.ai.duplicate_agent import _compute_content_hash
     from app.services.email_service import EmailService
 
@@ -691,7 +695,6 @@ async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
         duplicates_removed=duplicates_removed,
     )
 
-    # Email only when this run discovered NEW events
     emails_sent = 0
     if new_event_ids:
         email_service = EmailService()
@@ -701,31 +704,48 @@ async def run_hourly_notifications(trigger_source: str = "scheduled") -> dict:
             # Cap digest size so emails stay readable
             new_events = new_events[:25]
 
-            users_result = await db.execute(select(User).where(User.is_active == True))
-            recipients = [u.email for u in users_result.scalars().all()]
-            if settings.NOTIFICATION_EMAIL and settings.NOTIFICATION_EMAIL not in recipients:
-                recipients.append(settings.NOTIFICATION_EMAIL)
+            # 2. Select active users with email notifications enabled and set to hourly
+            users_query = select(User).join(UserProfile).where(
+                User.is_active == True,
+                UserProfile.notification_enabled == True,
+                UserProfile.notification_frequency == "hourly"
+            )
+            users_result = await db.execute(users_query)
+            active_users = list(users_result.scalars().all())
 
-        if recipients and new_events:
-            text, html = _hourly_digest_email(new_events)
-            for recipient in recipients:
+            # Also query user profiles explicitly to avoid lazy loading issues
+            for user in active_users:
+                # Reload profile in session
+                profile_result = await db.execute(select(UserProfile).where(UserProfile.user_id == user.id))
+                profile = profile_result.scalar_one_or_none()
+                if not profile:
+                    continue
+
+                selected = profile.selected_sources or []
+                matched_events = [e for e in new_events if e.platform.lower() in [s.lower() for s in selected]]
+
+                if not matched_events:
+                    continue
+
+                text, html = _hourly_personalized_digest_email(user.full_name, user.email, matched_events)
                 try:
                     ok = await email_service.send_email(
-                        to_email=recipient,
-                        subject="🚀 New Hackathons & Coding Contests",
+                        to_email=user.email,
+                        subject="🚀 New Opportunities Matching Your Preferences",
                         html_content=html,
                         text_content=text,
                     )
                     if ok:
                         emails_sent += 1
+                        profile.last_notification_time = datetime.now(timezone.utc)
+                        db.add(profile)
                 except Exception as e:
-                    failures[f"email_{recipient}"] = str(e)[:200]
-            logger.info("Emails sent", count=emails_sent, recipients=len(recipients))
-        else:
-            logger.info("No recipients or no new events; skipping email")
+                    failures[f"email_{user.email}"] = str(e)[:200]
+            
+            await db.commit()
 
     end_time = datetime.now(timezone.utc)
-    status = "failed" if len(failures) >= len(HOURLY_PLATFORMS) else "success"
+    status = "failed" if len(failures) >= len(HOURLY_PLATFORMS) and HOURLY_PLATFORMS else "success"
     async with AsyncSessionLocal() as db:
         fresh_log = await db.get(SchedulerLog, log_id)
         if fresh_log:
