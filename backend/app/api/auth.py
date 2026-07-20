@@ -427,7 +427,7 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/setup-test-users")
+@router.get("/setup-test-users")
 async def setup_test_users(db: AsyncSession = Depends(get_db)):
     """Seed test users into the database (challaudaykumar1@gmail.com, user1@test.com, user2@test.com)"""
     from app.core.security import hash_password
