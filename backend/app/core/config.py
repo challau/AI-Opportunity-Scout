@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@aiopportunityscout.com"
     SMTP_FROM_NAME: str = "AI Opportunity Scout"
     SENDGRID_API_KEY: str = ""
+    # Alias some deployments use instead of SMTP_FROM_EMAIL
+    SMTP_FROM: str = ""
+    # Default recipient for test/system notifications
+    NOTIFICATION_EMAIL: str = ""
 
     # ─── Telegram ─────────────────────────────────────────────────────────────
     TELEGRAM_BOT_TOKEN: str = ""
@@ -140,6 +144,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def normalize_database_urls(self):
+        # SMTP_FROM is an accepted alias for SMTP_FROM_EMAIL
+        if self.SMTP_FROM and not os.getenv("SMTP_FROM_EMAIL"):
+            self.SMTP_FROM_EMAIL = self.SMTP_FROM
         # Detect Railway: treat its environment as production unless APP_ENV
         # was set explicitly.
         if os.getenv("RAILWAY_ENVIRONMENT") and not os.getenv("APP_ENV"):
