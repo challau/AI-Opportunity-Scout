@@ -1,0 +1,1 @@
+# AI-Opportunity-Scout
