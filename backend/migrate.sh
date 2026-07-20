@@ -42,6 +42,21 @@ try:
     import app.models  # noqa: F401
     Base.metadata.create_all(engine, checkfirst=True)
     print("Schema ensured from models")
+
+    # 4. create_all skips existing tables, so add any columns the models
+    #    gained since the table was created (idempotent, additive only).
+    insp = sa.inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            db_cols = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in db_cols:
+                    continue
+                ddl = f'ALTER TABLE {table.name} ADD COLUMN IF NOT EXISTS {col.name} {col.type.compile(engine.dialect)}'
+                conn.execute(sa.text(ddl))
+                print(f"Added column {table.name}.{col.name}")
 except Exception as e:
     print(f"WARNING: schema preparation failed: {e}")
 EOF
