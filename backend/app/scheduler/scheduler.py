@@ -124,19 +124,19 @@ def _start_scheduler_jobs() -> None:
         misfire_grace_time=300,
     )
 
-    # ─── Hourly opportunity notifications ─────────────────────────────────────
+    # ─── Opportunity notifications (every 6 hours) ────────────────────────────
     from datetime import datetime, timedelta
     _scheduler.add_job(
         func=run_hourly_notifications,
         args=["scheduled"],
-        trigger=IntervalTrigger(hours=1),
+        trigger=IntervalTrigger(hours=6),
         id="hourly_notifications",
-        name="Hourly opportunity notifications",
+        name="Opportunity notifications (6-hourly)",
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=600,
         # First run ~2 min after boot so each deploy verifies the pipeline
-        # without waiting a full hour; dedup makes early runs safe.
+        # without waiting the full interval; dedup makes early runs safe.
         next_run_time=datetime.now(timezone(settings.SCHEDULER_TIMEZONE)) + timedelta(seconds=120),
     )
 

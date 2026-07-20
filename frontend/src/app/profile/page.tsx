@@ -163,19 +163,21 @@ export default function ProfilePage() {
       </div>
 
       <Tabs defaultValue="interests" className="space-y-6">
-        <TabsList className="glass border border-border/50 h-auto p-1 gap-1 flex-wrap">
-          <TabsTrigger value="interests" className="data-[state=active]:gradient-primary data-[state=active]:text-white">
-            Interests
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="data-[state=active]:gradient-primary data-[state=active]:text-white">
-            Notifications
-          </TabsTrigger>
-          <TabsTrigger value="resume" className="data-[state=active]:gradient-primary data-[state=active]:text-white">
-            Resume
-          </TabsTrigger>
-          <TabsTrigger value="account" className="data-[state=active]:gradient-primary data-[state=active]:text-white">
-            Account
-          </TabsTrigger>
+        <TabsList className="glass border border-border/50 h-auto p-1.5 gap-1.5 flex flex-row flex-nowrap overflow-x-auto w-fit max-w-full rounded-xl">
+          {[
+            { value: "interests", label: "Interests" },
+            { value: "notifications", label: "Notifications" },
+            { value: "resume", label: "Resume" },
+            { value: "account", label: "Account" },
+          ].map((t) => (
+            <TabsTrigger
+              key={t.value}
+              value={t.value}
+              className="shrink-0 rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-300 ease-out hover:scale-[1.04] hover:bg-primary/10 data-[state=active]:gradient-primary data-[state=active]:text-white data-[state=active]:scale-[1.06] data-[state=active]:shadow-lg data-[state=active]:shadow-primary/30"
+            >
+              {t.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* Interests tab */}
@@ -350,9 +352,9 @@ export default function ProfilePage() {
                   id="hourly-email"
                 />
                 <div className="flex-1">
-                  <div className="font-medium">Send email every hour</div>
+                  <div className="font-medium">Send email every 6 hours</div>
                   <div className="text-sm text-muted-foreground">
-                    Receive an hourly digest of new opportunities matching your selected platforms
+                    Receive a digest of new hackathons & contests matching your selected platforms, 4 times a day
                   </div>
                 </div>
                 {hourlyEmail && <CheckCircle className="w-4 h-4 text-primary shrink-0" />}

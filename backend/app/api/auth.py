@@ -164,7 +164,13 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 @router.get("/google")
 async def google_oauth_start():
-    """Redirect to Google OAuth consent screen."""
+    """Redirect the browser to the Google OAuth consent screen."""
+    from fastapi.responses import RedirectResponse
+
+    if not settings.GOOGLE_CLIENT_ID or settings.GOOGLE_CLIENT_ID.startswith("your-"):
+        # OAuth not configured — send the user back to login with a clear flag
+        return RedirectResponse(f"{settings.APP_URL}/login?error=google_oauth_not_configured")
+
     from authlib.integrations.httpx_client import AsyncOAuth2Client  # type: ignore
     client = AsyncOAuth2Client(
         client_id=settings.GOOGLE_CLIENT_ID,
@@ -174,7 +180,7 @@ async def google_oauth_start():
     url, state = client.create_authorization_url(
         "https://accounts.google.com/o/oauth2/v2/auth"
     )
-    return {"auth_url": url, "state": state}
+    return RedirectResponse(url)
 
 
 @router.get("/google/callback")
