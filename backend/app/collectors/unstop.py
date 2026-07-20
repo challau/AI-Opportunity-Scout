@@ -1,6 +1,6 @@
 """Unstop.com crawler — hackathons, internships, competitions."""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import structlog
 
@@ -15,57 +15,75 @@ class UnstopCrawler(BaseCrawler):
     API_URL = "https://unstop.com/api/public/opportunity/search-new"
 
     async def _fetch_events(self) -> List[Dict]:
-        """Fetch hackathons and competitions from Unstop API."""
+        """Fetch open hackathons and competitions from Unstop API."""
         events = []
 
-        opportunity_types = [
-            ("hackathon", 1),
-            ("competition", 2),
-            ("internship", 9),
-            ("quiz", 5),
-        ]
-
-        for event_type, type_id in opportunity_types:
+        for opportunity in ["hackathons", "competitions", "internships"]:
             try:
                 params = {
-                    "type": type_id,
+                    "opportunity": opportunity,
                     "page": 1,
-                    "size": 50,
-                    "sort": "deadline",
+                    "per_page": 30,
+                    "oppstatus": "open",
                 }
                 data = await self._get_json(self.API_URL, params)
                 raw_items = data.get("data", {}).get("data", [])
 
+                event_type = opportunity.rstrip("s")
                 for item in raw_items:
                     event = self._parse_item(item, event_type)
                     if event:
                         events.append(event)
 
             except Exception as e:
-                logger.warning("Unstop type fetch failed", type=event_type, error=str(e))
+                logger.warning("Unstop type fetch failed", type=opportunity, error=str(e))
 
         logger.info("Unstop crawl", events=len(events))
         return events
 
+    def _registration_url(self, item: Dict) -> Optional[str]:
+        """Build the event URL. seo_url may be a full URL; public_url is a path."""
+        seo = item.get("seo_url") or ""
+        if seo.startswith("http"):
+            return seo
+        public = item.get("public_url") or seo
+        if public:
+            return f"{self.BASE_URL}/{public.lstrip('/')}"
+        return None
+
+    @staticmethod
+    def _prize_text(item: Dict) -> Optional[str]:
+        prizes = item.get("prizes") or []
+        cash = [p.get("cash") for p in prizes if p.get("cash")]
+        if cash:
+            currency = "₹" if "rupee" in str(prizes[0].get("currency", "")) else ""
+            return f"{currency}{int(sum(cash)):,}"
+        return None
+
     def _parse_item(self, item: Dict, event_type: str) -> Dict:
         """Parse a single Unstop opportunity item."""
         try:
+            url = self._registration_url(item)
+            if not url:
+                return {}
+            regn = item.get("regnRequirements") or {}
             return {
                 "title": item.get("title", ""),
-                "description": item.get("description", ""),
+                "description": (item.get("details") or "")[:2000],
                 "platform": self.PLATFORM_NAME,
                 "event_type": event_type,
-                "prize": item.get("prize", ""),
-                "registration_deadline": item.get("end_at"),
-                "event_start_date": item.get("start_at"),
-                "registration_url": f"{self.BASE_URL}/o/{item.get('seo_url', item.get('id', ''))}",
-                "image_url": item.get("banner_image"),
-                "organizer": item.get("organisation", {}).get("name"),
-                "is_free": item.get("fees_amount", 0) == 0,
-                "is_remote": not item.get("is_physical", False),
-                "tags": [t.get("name", "") for t in item.get("tags", [])],
+                "prize": self._prize_text(item),
+                "registration_deadline": regn.get("end_regn_dt") or item.get("end_date"),
+                "event_start_date": item.get("start_date"),
+                "event_end_date": item.get("end_date"),
+                "registration_url": url,
+                "image_url": item.get("banner_mobile") or item.get("logoUrl2"),
+                "organizer": (item.get("organisation") or {}).get("name"),
+                "is_free": not item.get("isPaid", False),
+                "is_remote": item.get("region") != "offline",
+                "tags": [f.get("name", "") for f in (item.get("filters") or []) if f.get("name")][:8],
                 "external_id": str(item.get("id", "")),
-                "participant_count": item.get("registrations_count", 0),
+                "participant_count": item.get("registerCount", 0),
             }
         except Exception as e:
             logger.warning("Failed to parse Unstop item", error=str(e))
