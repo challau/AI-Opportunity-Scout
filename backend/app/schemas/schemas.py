@@ -77,6 +77,7 @@ class ProfileUpdate(BaseModel):
     preferred_platforms: Optional[List[str]] = None
     selected_sources: Optional[List[str]] = None
     email_notifications: Optional[bool] = None
+    notification_enabled: Optional[bool] = None
     telegram_notifications: Optional[bool] = None
     notification_frequency: Optional[str] = None
     telegram_chat_id: Optional[str] = None
@@ -96,6 +97,7 @@ class ProfileResponse(BaseModel):
         "codeforces", "codechef", "leetcode", "atcoder",
     ]
     email_notifications: bool = True
+    notification_enabled: bool = True
     telegram_notifications: bool = False
     notification_frequency: str = "hourly"
     telegram_chat_id: Optional[str] = None

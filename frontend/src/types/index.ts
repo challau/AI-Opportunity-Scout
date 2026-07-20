@@ -22,6 +22,7 @@ export interface UserProfile {
   preferred_platforms: string[];
   selected_sources: string[];
   email_notifications: boolean;
+  notification_enabled: boolean;
   telegram_notifications: boolean;
   notification_frequency: "instant" | "hourly" | "daily" | "weekly";
   telegram_chat_id?: string;

@@ -48,5 +48,41 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     resumes = relationship("Resume", back_populates="user", cascade="all, delete-orphan")
 
+    @property
+    def notification_enabled(self) -> bool:
+        return self.profile.notification_enabled if self.profile else True
+
+    @notification_enabled.setter
+    def notification_enabled(self, value: bool):
+        if self.profile:
+            self.profile.notification_enabled = value
+
+    @property
+    def selected_sources(self) -> list[str]:
+        return self.profile.selected_sources if self.profile else []
+
+    @selected_sources.setter
+    def selected_sources(self, value: list[str]):
+        if self.profile:
+            self.profile.selected_sources = value
+
+    @property
+    def notification_frequency(self) -> str:
+        return self.profile.notification_frequency if self.profile else "hourly"
+
+    @notification_frequency.setter
+    def notification_frequency(self, value: str):
+        if self.profile:
+            self.profile.notification_frequency = value
+
+    @property
+    def last_notification_time(self) -> datetime | None:
+        return self.profile.last_notification_time if self.profile else None
+
+    @last_notification_time.setter
+    def last_notification_time(self, value: datetime | None):
+        if self.profile:
+            self.profile.last_notification_time = value
+
     def __repr__(self) -> str:
         return f"<User {self.email}>"

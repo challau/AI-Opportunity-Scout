@@ -44,6 +44,7 @@ class UserProfile(Base):
 
     # Notification settings
     email_notifications: Mapped[bool] = mapped_column(default=True)
+    notification_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     telegram_notifications: Mapped[bool] = mapped_column(default=False)
     notification_frequency: Mapped[str] = mapped_column(String(20), default="hourly")  # instant|hourly|daily|weekly
     telegram_chat_id: Mapped[str] = mapped_column(String(100), nullable=True)
